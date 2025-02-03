@@ -1,3 +1,4 @@
+use clap::Parser;
 use glob::glob;
 use std::process::Command;
 use std::thread::sleep;
@@ -20,15 +21,13 @@ fn is_device_in_use(glob_pattern: &str) -> bool {
     false
 }
 
-fn activate_busylight(activate: bool) -> bool {
-    let mut command = Command::new("busylight");
-    if activate {
-        command.arg("on").arg("red");
+fn activate_busylight(activate: bool, activate_cmd: &String, deactivate_cmd: &String) -> bool {
+    let change_state_cmd = if activate {
+        activate_cmd
     } else {
-        command.arg("off");
-    }
-
-    let output = command.output();
+        deactivate_cmd
+    };
+    let output = Command::new("sh").arg("-c").arg(change_state_cmd).output();
 
     match output {
         Ok(output) => {
@@ -53,9 +52,20 @@ fn activate_busylight(activate: bool) -> bool {
     }
 }
 
+#[derive(Parser)]
+#[command(name = "auto-busylight")]
+#[command(about = "Automatically detect camera or microphone usage for turning on a busy light")]
+struct Args {
+    #[arg(default_value = "busylight on red")]
+    on_meeting_start_cmd: String,
+    #[arg(default_value = "busylight off")]
+    on_meeting_end_cmd: String,
+}
+
 fn main() {
     let check_interval = Duration::from_millis(2000);
     let mut light_on: bool = false;
+    let args = Args::parse();
 
     println!(
         "Ready!  Busylight will be activated automatically when webcam or microphone is accessed."
@@ -68,12 +78,12 @@ fn main() {
         if webcam_in_use || microphone_in_use {
             if !light_on {
                 println!("Meeting started");
-                activate_busylight(true);
+                activate_busylight(true, &args.on_meeting_start_cmd, &args.on_meeting_end_cmd);
                 light_on = true;
             }
         } else if light_on {
             println!("Meeting stopped");
-            activate_busylight(false);
+            activate_busylight(false, &args.on_meeting_start_cmd, &args.on_meeting_end_cmd);
             light_on = false;
         }
 
